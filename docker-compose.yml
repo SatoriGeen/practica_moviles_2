@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # 1. LA BASE DE DATOS
+  postgres-db:
+    image: postgres:15
+    container_name: supermercado_db
+    environment:
+      POSTGRES_DB: practicadb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+  # 2. SERVIDOR SPRING BOOT
+  backend-api:
+    build: .
+    container_name: supermercado_backend
+    ports:
+      - "8080:8080"
+    environment:
+      # postgres-db para que hablen entre contenedores
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/practicadb
+    depends_on:
+      - postgres-db
+    restart: always
+
+volumes:
+  postgres_data:
