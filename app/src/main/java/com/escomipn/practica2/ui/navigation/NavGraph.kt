@@ -1,6 +1,6 @@
 package com.escomipn.practica2.ui.navigation
 
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -8,6 +8,7 @@ import com.escomipn.practica2.ui.screens.LoginScreen
 import com.escomipn.practica2.ui.screens.ProductFormScreen
 import com.escomipn.practica2.ui.screens.ProductListScreen
 import com.escomipn.practica2.ui.screens.RegisterScreen
+import com.escomipn.practica2.data.model.Producto
 
 sealed class Screen(val route: String) {
     object Login : Screen("login")
@@ -20,6 +21,10 @@ sealed class Screen(val route: String) {
 fun MainNavigation() {
     val navController = rememberNavController()
 
+    // --- ESTADO PARA EL PRODUCTO A EDITAR ---
+    // Esta variable guardará el producto cuando le des clic al lápiz
+    var productoAEditar by remember { mutableStateOf<Producto?>(null) }
+
     NavHost(navController = navController, startDestination = Screen.Login.route) {
         composable(Screen.Login.route) {
             LoginScreen(
@@ -27,24 +32,36 @@ fun MainNavigation() {
                 onNavigateToRegister = { navController.navigate(Screen.Register.route) }
             )
         }
+
         composable(Screen.Register.route) {
             RegisterScreen(
                 onRegisterSuccess = { navController.popBackStack() },
                 onNavigateToLogin = { navController.popBackStack() }
             )
         }
+
         composable(Screen.ProductList.route) {
             ProductListScreen(
-                onAddProduct = { navController.navigate(Screen.ProductForm.route) },
-                onEditProduct = { product ->
+                onAddProduct = {
+                    productoAEditar = null // Si es producto nuevo, limpiamos el estado
+                    navController.navigate(Screen.ProductForm.route)
+                },
+                onEditProduct = { producto ->
+                    productoAEditar = producto // Guardamos el producto seleccionado
                     navController.navigate(Screen.ProductForm.route)
                 }
             )
         }
+
         composable(Screen.ProductForm.route) {
             ProductFormScreen(
-                onSave = { navController.popBackStack() },
-                onBack = { navController.popBackStack() }
+                productoParaEditar = productoAEditar, // <--- PASAMOS EL PRODUCTO REAL
+                onSaveSuccess = {
+                    navController.popBackStack()
+                },
+                onBack = {
+                    navController.popBackStack()
+                }
             )
         }
     }

@@ -1,5 +1,7 @@
 package com.escomipn.practica2.ui.screens
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,23 +13,47 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-data class Product(val id: Int, val name: String, val price: Double, val stock: Int)
+import com.escomipn.practica2.data.model.Producto
+import com.escomipn.practica2.data.network.RetrofitClient
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProductListScreen(onAddProduct: () -> Unit, onEditProduct: (Product) -> Unit) {
-    // Ejemplo de lista estática para previsualización del diseño
-    val products = remember {
-        mutableStateListOf(
-            Product(1, "Leche Entera", 25.50, 50),
-            Product(2, "Pan Integral", 35.00, 20),
-            Product(3, "Arroz 1kg", 18.20, 100),
-            Product(4, "Aceite Vegetal", 45.00, 30)
-        )
+fun ProductListScreen(onAddProduct: () -> Unit, onEditProduct: (Producto) -> Unit) {
+    val context = LocalContext.current
+    val products = remember { mutableStateListOf<Producto>() }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // 1. Recuperar el Token JWT
+    val sharedPref = context.getSharedPreferences("AUTH_PREFS", Context.MODE_PRIVATE)
+    val token = sharedPref.getString("jwt_token", "") ?: ""
+
+    // 2. Función para cargar datos (se puede reutilizar para refrescar)
+    val cargarProductos = {
+        isLoading = true
+        RetrofitClient.instance.obtenerProductos(token).enqueue(object : Callback<List<Producto>> {
+            override fun onResponse(call: Call<List<Producto>>, response: Response<List<Producto>>) {
+                isLoading = false
+                if (response.isSuccessful) {
+                    products.clear()
+                    response.body()?.let { products.addAll(it) }
+                } else {
+                    Toast.makeText(context, "Error: ${response.code()}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            override fun onFailure(call: Call<List<Producto>>, t: Throwable) {
+                isLoading = false
+                Toast.makeText(context, "Fallo de conexión", Toast.LENGTH_SHORT).show()
+            }
+        })
     }
+
+    LaunchedEffect(Unit) { cargarProductos() }
 
     Scaffold(
         floatingActionButton = {
@@ -45,47 +71,59 @@ fun ProductListScreen(onAddProduct: () -> Unit, onEditProduct: (Product) -> Unit
             )
         }
     ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(products) { product ->
-                ProductItem(
-                    product = product,
-                    onEdit = { onEditProduct(product) },
-                    onDelete = { products.remove(product) }
-                )
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(paddingValues),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(products) { product ->
+                    ProductItem(
+                        product = product,
+                        onEdit = { onEditProduct(product) },
+                        onDelete = {
+                            // --- LÓGICA DE ELIMINAR REAL ---
+                            product.id?.let { id ->
+                                RetrofitClient.instance.eliminarProducto(token, id).enqueue(object : Callback<Void> {
+                                    override fun onResponse(call: Call<Void>, response: Response<Void>) {
+                                        if (response.isSuccessful) {
+                                            products.remove(product)
+                                            Toast.makeText(context, "Eliminado con éxito", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, "No se pudo eliminar", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                    override fun onFailure(call: Call<Void>, t: Throwable) {
+                                        Toast.makeText(context, "Error de red", Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            }
+                        }
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun ProductItem(product: Product, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun ProductItem(product: Producto, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Precio: $${product.price} | Stock: ${product.stock}",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Text(text = product.nombre, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(text = "Precio: $${product.precio} | Stock: ${product.stock}", style = MaterialTheme.typography.bodyMedium)
             }
             Row {
                 IconButton(onClick = onEdit) {
