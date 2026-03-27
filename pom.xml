@@ -13,7 +13,7 @@
     <name>backend-api</name>
     <description>Backend API para Practica</description>
     <properties>
-        <java.version>25</java.version>
+        <java.version></java.version>
     </properties>
     <dependencies>
 
